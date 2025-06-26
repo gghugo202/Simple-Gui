@@ -1,0 +1,337 @@
+task.wait(2) -- ensure GUI waits for game to load
+
+local Players             = game:GetService("Players")
+local UserInputService    = game:GetService("UserInputService")
+local RunService          = game:GetService("RunService")
+local player              = Players.LocalPlayer
+
+-- GUI Setup
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "TeleportGui"
+screenGui.ResetOnSpawn = false
+
+local function addCorner(ui)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = ui
+end
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 270, 0, 400)
+mainFrame.Position = UDim2.new(0.7, 0, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+addCorner(mainFrame)
+
+local tabFrame = Instance.new("Frame", mainFrame)
+tabFrame.Size = UDim2.new(1, 0, 0, 40)
+tabFrame.Position = UDim2.new(0, 0, 0, 0)
+tabFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+addCorner(tabFrame)
+
+local pages = {}
+
+local function createPage(name)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.Size = UDim2.new(1, 0, 1, -40)
+    frame.Position = UDim2.new(0, 0, 0, 40)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    frame.Visible = false
+    frame.Parent = mainFrame
+    addCorner(frame)
+    pages[name] = frame
+    return frame
+end
+
+createPage("Teleport")
+createPage("Player")
+createPage("Credits")
+
+local function switchTo(name)
+    for pageName, pageFrame in pairs(pages) do
+        pageFrame.Visible = (pageName == name)
+    end
+end
+
+local function addTabButton(name, order)
+    local btn = Instance.new("TextButton", tabFrame)
+    btn.Size = UDim2.new(0, 90, 1, 0)
+    btn.Position = UDim2.new(0, (order - 1) * 90, 0, 0)
+    btn.Text = name
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.SourceSans
+    btn.TextSize = 18
+    addCorner(btn)
+    btn.MouseButton1Click:Connect(function()
+        switchTo(name)
+    end)
+end
+
+addTabButton("Teleport", 1)
+addTabButton("Player", 2)
+addTabButton("Credits", 3)
+switchTo("Teleport")
+
+local function addBackBtn(parent)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.Position = UDim2.new(0, 5, 1, -35)
+    btn.Text = "Back"
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    addCorner(btn)
+    btn.MouseButton1Click:Connect(function()
+        switchTo("Teleport")
+    end)
+end
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Teleport Tab
+-- ─────────────────────────────────────────────────────────────────────────────
+local function createTeleportTab()
+    local teleportPage = pages["Teleport"]
+
+    local refreshBtn = Instance.new("TextButton", teleportPage)
+    refreshBtn.Size = UDim2.new(1, -10, 0, 30)
+    refreshBtn.Position = UDim2.new(0, 5, 0, 10)
+    refreshBtn.Text = "Refresh Player List"
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    refreshBtn.TextColor3 = Color3.new(1,1,1)
+    addCorner(refreshBtn)
+
+    local playerList = Instance.new("ScrollingFrame", teleportPage)
+    playerList.Size = UDim2.new(1, -10, 1, -50)
+    playerList.Position = UDim2.new(0, 5, 0, 50)
+    playerList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    playerList.ScrollBarThickness = 6
+    playerList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    playerList.BorderSizePixel = 0
+    addCorner(playerList)
+
+    local layout = Instance.new("UIListLayout", playerList)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Padding = UDim.new(0, 5)
+
+    local function populatePlayers()
+        for _, c in ipairs(playerList:GetChildren()) do
+            if c:IsA("TextButton") then c:Destroy() end
+        end
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player then
+                local btn = Instance.new("TextButton", playerList)
+                btn.Size = UDim2.new(1, 0, 0, 30)
+                btn.Text = p.Name
+                btn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+                btn.TextColor3 = Color3.new(1, 1, 1)
+                addCorner(btn)
+                btn.MouseButton1Click:Connect(function()
+                    local targetHRP = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+                    local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                    if targetHRP and myHRP then
+                        myHRP.CFrame = targetHRP.CFrame + Vector3.new(2, 0, 0)
+                    end
+                end)
+            end
+        end
+        playerList.CanvasSize = UDim2.new(0, 0, 0, #Players:GetPlayers() * 35)
+    end
+
+    refreshBtn.MouseButton1Click:Connect(populatePlayers)
+    task.delay(2, populatePlayers)
+    addBackBtn(teleportPage)
+end
+createTeleportTab()
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Player Tab
+-- ─────────────────────────────────────────────────────────────────────────────
+local playerPage = pages["Player"]
+local infJump = false
+local noclip  = false
+
+-- Infinite Jump
+local infBtn = Instance.new("TextButton", playerPage)
+infBtn.Size = UDim2.new(1, -10, 0, 30)
+infBtn.Position = UDim2.new(0, 5, 0, 10)
+infBtn.Text = "Infinite Jump: OFF"
+infBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+infBtn.TextColor3 = Color3.new(1,1,1)
+addCorner(infBtn)
+
+infBtn.MouseButton1Click:Connect(function()
+    infJump = not infJump
+    infBtn.Text = "Infinite Jump: " .. (infJump and "ON" or "OFF")
+end)
+
+local JumpRequestConnection = UserInputService.JumpRequest:Connect(function()
+    if infJump then
+        local h = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
+        if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- Noclip
+local noclipBtn = Instance.new("TextButton", playerPage)
+noclipBtn.Size = UDim2.new(1, -10, 0, 30)
+noclipBtn.Position = UDim2.new(0, 5, 0, 50)
+noclipBtn.Text = "Noclip: OFF"
+noclipBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+noclipBtn.TextColor3 = Color3.new(1,1,1)
+addCorner(noclipBtn)
+
+noclipBtn.MouseButton1Click:Connect(function()
+    noclip = not noclip
+    noclipBtn.Text = "Noclip: " .. (noclip and "ON" or "OFF")
+end)
+
+local RunServiceConnection = RunService.Stepped:Connect(function()
+    if noclip and player.Character then
+        for _, part in pairs(player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- Built-in Fly Script
+local flying    = false
+local flySpeed  = 50   -- default
+local bodyV, bodyG, rootPart
+
+-- Fly Toggle Button
+local flyBtn = Instance.new("TextButton", playerPage)
+flyBtn.Size = UDim2.new(1, -10, 0, 30)
+flyBtn.Position = UDim2.new(0, 5, 0, 90)
+flyBtn.Text = "Fly: OFF"
+flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+flyBtn.TextColor3 = Color3.new(1,1,1)
+addCorner(flyBtn)
+
+-- Speed TextBox
+local speedLabel = Instance.new("TextLabel", playerPage)
+speedLabel.Size = UDim2.new(0, 60, 0, 24)
+speedLabel.Position = UDim2.new(0, 5, 0, 130)
+speedLabel.Text = "Speed:"
+speedLabel.Font = Enum.Font.SourceSans
+speedLabel.TextSize = 18
+speedLabel.TextColor3 = Color3.new(1,1,1)
+speedLabel.BackgroundTransparency = 1
+
+local speedBox = Instance.new("TextBox", playerPage)
+speedBox.Size = UDim2.new(0, 80, 0, 24)
+speedBox.Position = UDim2.new(0, 70, 0, 130)
+speedBox.Text = tostring(flySpeed)
+speedBox.Font = Enum.Font.SourceSans
+speedBox.TextSize = 18
+speedBox.TextColor3 = Color3.new(1,1,1)
+speedBox.ClearTextOnFocus = false
+speedBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+speedBox.BorderSizePixel = 0
+addCorner(speedBox)
+
+-- Toggle flying on button click
+flyBtn.MouseButton1Click:Connect(function()
+    flying = not flying
+    flyBtn.Text = "Fly: " .. (flying and "ON" or "OFF")
+
+    if flying then
+        local char = player.Character or player.CharacterAdded:Wait()
+        rootPart = char:WaitForChild("HumanoidRootPart")
+        bodyV = Instance.new("BodyVelocity", rootPart)
+        bodyV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyG = Instance.new("BodyGyro", rootPart)
+        bodyG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    else
+        if bodyV then bodyV:Destroy() end
+        if bodyG then bodyG:Destroy() end
+        bodyV, bodyG = nil, nil
+    end
+end)
+
+-- Update speed when focus is lost
+speedBox.FocusLost:Connect(function(enterPressed)
+    local v = tonumber(speedBox.Text)
+    if v and v > 0 then
+        flySpeed = v
+    else
+        speedBox.Text = tostring(flySpeed)
+    end
+end)
+
+-- Apply camera-based flight every frame
+RunService.RenderStepped:Connect(function()
+    if flying and rootPart and bodyV and bodyG then
+        local cam = workspace.CurrentCamera
+        local dir = cam.CFrame.LookVector
+        bodyV.Velocity = dir * flySpeed
+        bodyG.CFrame = CFrame.new(rootPart.Position, rootPart.Position + dir)
+    end
+end)
+
+addBackBtn(playerPage)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Credits Tab
+-- ─────────────────────────────────────────────────────────────────────────────
+local creditsPage = pages["Credits"]
+
+local creditLabel = Instance.new("TextLabel", creditsPage)
+creditLabel.Size = UDim2.new(1, -10, 0, 50)
+creditLabel.Position = UDim2.new(0, 5, 0, 10)
+creditLabel.BackgroundTransparency = 1
+creditLabel.Text = "Made by gg.hugo"
+creditLabel.TextSize = 20
+creditLabel.Font = Enum.Font.SourceSansBold
+creditLabel.TextColor3 = Color3.new(1, 0, 0)
+addCorner(creditLabel)
+
+-- Animate rainbow color
+local hue = 0
+local rainbowConnection = RunService.RenderStepped:Connect(function()
+    hue = (hue + 0.01) % 1
+    creditLabel.TextColor3 = Color3.fromHSV(hue, 1, 1)
+end)
+
+local discordLabel = Instance.new("TextLabel", creditsPage)
+discordLabel.Size = UDim2.new(1, -10, 0, 25)
+discordLabel.Position = UDim2.new(0, 5, 0, 70)
+discordLabel.BackgroundTransparency = 1
+discordLabel.Text = "Join: discord.gg/dxskaxMpZN"
+discordLabel.TextSize = 16
+discordLabel.Font = Enum.Font.SourceSans
+discordLabel.TextColor3 = Color3.new(1, 1, 1)
+addCorner(discordLabel)
+
+addBackBtn(creditsPage)
+
+-- Toggle entire GUI with RightShift
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.RightShift and not gameProcessed then
+        screenGui.Enabled = not screenGui.Enabled
+    end
+end)
+
+-- Kill GUI Button
+local killBtn = Instance.new("TextButton", mainFrame)
+killBtn.Size = UDim2.new(1, -10, 0, 30)
+killBtn.Position = UDim2.new(0, 5, 1, -40)
+killBtn.Text = "Kill GUI"
+killBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+killBtn.TextColor3 = Color3.new(1, 1, 1)
+killBtn.Font = Enum.Font.SourceSansBold
+killBtn.TextSize = 18
+addCorner(killBtn)
+
+killBtn.MouseButton1Click:Connect(function()
+    pcall(function() screenGui:Destroy() end)
+    infJump = false
+    noclip = false
+    if rainbowConnection then rainbowConnection:Disconnect() end
+    if RunServiceConnection then RunServiceConnection:Disconnect() end
+    if JumpRequestConnection then JumpRequestConnection:Disconnect() end
+end)
